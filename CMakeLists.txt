@@ -1,35 +1,41 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.1.0)
 
 project(orbbec_camera_imu)
 
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
+CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+if(COMPILER_SUPPORTS_CXX11)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+elseif(COMPILER_SUPPORTS_CXX0X)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+endif()
 
-find_package(catkin REQUIRED COMPONENTS
-  cv_bridge
-  image_transport
-  roscpp
-  sensor_msgs
-  std_msgs
-  geometry_msgs
-)
+INCLUDE_DIRECTORIES(include src)
 
-catkin_package(
-  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs
-)
+set(ORBBEC_HPP
+    include/h/advanced_mode_command.h
+    include/h/context.h
+    include/h/device.h
+    include/h/frame.h
+    include/h/internal.h
+    include/h/option
+    include/h/pipeline.h
+    include/h/processing.h
+    include/h/record_playback.h
+    include/h/sensor.h
+    include/h/types.h
 
-include_directories(
-	include
-  ${catkin_INCLUDE_DIRS}
-)
+    include/hpp/context.hpp
+    include/hpp/frame.hpp
+    include/hpp/types.hpp
+
+    include/orbbec.h
+    include/orbbec.hpp)
+#include_directories(include)
+add_library(orbbec-lib
+            SHARED
+            ${ORBBEC_HPP})
 
 
-find_package (Threads)
-find_package(OpenCV REQUIRED)
-add_executable(orbbec_camera_imu_node src/camera_imu_utils.cpp)
-add_dependencies( orbbec_camera_imu_node  ${catkin_EXPORTED_TARGETS} )
-target_link_libraries(orbbec_camera_imu_node ${OpenCV_LIBS}    ${catkin_LIBRARIES}
-pthread)
-
-add_executable(imu_node src/imu.cpp src/imu_filter.cpp)
-add_dependencies( imu_node  ${catkin_EXPORTED_TARGETS} )
-target_link_libraries(imu_node   ${catkin_LIBRARIES})
