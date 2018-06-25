@@ -4,11 +4,11 @@
 #include "orbbec.h"
 #include "types.h"
 #include "context.hpp"
-#include "hpp/rs_device.hpp"
-#include "hpp/rs_frame.hpp"
-#include "hpp/rs_processing.hpp"
-#include "hpp/rs_record_playback.hpp"
-#include "hpp/rs_sensor.hpp"
-#include "hpp/rs_pipeline.hpp"
+#include "hpp/orbbec_device.hpp"
+#include "hpp/orbbec_frame.hpp"
+#include "hpp/orbbec_processing.hpp"
+#include "hpp/orbbec_record_playback.hpp"
+#include "hpp/orbbec_sensor.hpp"
+#include "hpp/orbbec_pipeline.hpp"
 
 #endif // ORBBEC_HPP
