@@ -44,10 +44,14 @@ void filter_data(sensor_msgs::Imu imu_raw_data)
     else
     {
         sensor_msgs::Imu imu_data = imu_raw_data;
+        imu_data.header.stamp = ros::Time::now();
+        imu_data.header.frame_id = "base_imu_filtered";
         geometry_msgs::Vector3& ang_vel = imu_data.angular_velocity;
         geometry_msgs::Vector3& lin_acc = imu_data.linear_acceleration;
         float dt = (current_time_ - last_time_).toSec();
         last_time_ = current_time_;
+        std::cout<<"last_time: "<< last_time_ <<endl;
+        std::cout<<"dt: "<< dt <<endl;
         filter_.madgwickAHRSupdateIMU(
             ang_vel.x, ang_vel.y, ang_vel.z,
             lin_acc.x, lin_acc.y, lin_acc.z,
@@ -83,6 +87,7 @@ void get_imu_data()
 
     sensor_msgs::Imu imu_data;
     imu_data.header.frame_id = "base_imu";
+    // imu_data.header.stamp = ros::Time::now();
 
 
     while(std::getline(file,line))
@@ -90,7 +95,8 @@ void get_imu_data()
         if (!line.empty() && !isWhitespace(line))
         {
             stringstream strs(line);
-            imu_data.header.stamp = ros::Time::now() + offset;
+            // imu_data.header.stamp = ros::Time::now() + offset;
+            imu_data.header.stamp = ros::Time::now() ;
             while(getline(strs, t, ' '))
             {
                 tf = atof(t.c_str());
@@ -128,6 +134,7 @@ void get_imu_data()
         filter_data(imu_data);
         imu_raw_pub_.publish(imu_data);
     }
+    file.close();
 }
 
 int main(int argc, char** argv)
@@ -145,9 +152,10 @@ int main(int argc, char** argv)
 
             rate.sleep();
        }
+    // get_imu_data();
+    // ros::spin();
 
-
-    exit (EXIT_SUCCESS);
+    // exit (EXIT_SUCCESS);
 
     return 0;
 }
