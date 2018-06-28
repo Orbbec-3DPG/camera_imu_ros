@@ -27,7 +27,7 @@ def msg2png(msg, path):
 	timestr = "%s" % msg.header.stamp;
 	image_name = img_path + '/'+ timestr + ".png"
 	cv2.imwrite(image_name, cv_image)
-	print '\rcreating images...'
+	print 'creating images...'
 
 def img2csvdata(msg,path):
 	file_name = path + 'data.csv'
@@ -81,6 +81,12 @@ if __name__ == '__main__':
 	    	if topic == '/cam1/image_raw':
 	    		path = './cam1/'
 	    		msg2png(msg, path)
+	    		img2csvdata(msg, path)
+
+	    	if topic == '/camera/image_raw':
+	    		path = './camera/'
+	    		msg2png(msg, path)
+	    		img2csvdata(msg, path)
 	    		# count+=1
 
 	    	if topic == '/imu0':
