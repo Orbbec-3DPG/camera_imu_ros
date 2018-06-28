@@ -119,12 +119,189 @@ public:
     }
 };
 
+class dispatcher
+{
+public:
+    class cancellable_timer
+    {
+    public:
+        cancellable_timer(dispatcher* owner)
+            : _owner(owner)
+        {}
 
+        bool try_sleep(int ms)
+        {
+            using namespace std::chrono;
 
+            std::unique_lock<std::mutex> lock(_owner->_was_stopped_mutex);
+            auto good = [&]() { return _owner->_was_stopped.load(); };
+            return !(_owner->_was_stopped_cv.wait_for(lock, milliseconds(ms), good));
+        }
 
+    private:
+        dispatcher* _owner;
+    };
 
+    dispatcher(unsigned int cap)
+        : _queue(cap),
+          _was_stopped(true),
+          _was_flushed(false),
+          _is_alive(true)
+    {
+        _thread = std::thread([&]()
+        {
+            while (_is_alive)
+            {
+                std::function<void(cancellable_timer)> item;
 
+                if (_queue.dequeue(&item))
+                {
+                    cancellable_timer time(this);
 
+                    try
+                    {
+                        item(time);
+                    }
+                    catch(...){}
+                }
 
+#ifndef ANDROID
+                std::unique_lock<std::mutex> lock(_was_flushed_mutex);
+#endif
+                _was_flushed = true;
+                _was_flushed_cv.notify_all();
+#ifndef ANDROID
+                lock.unlock();
+#endif
+            }
+        });
+    }
 
+    template<class T>
+    void invoke(T item)
+    {
+        if (!_was_stopped)
+        {
+            _queue.enqueue(std::move(item));
+        }
+    }
 
+    void start()
+    {
+        std::unique_lock<std::mutex> lock(_was_stopped_mutex);
+        _was_stopped = false;
+
+        _queue.start();
+    }
+
+    void stop()
+    {
+        {
+            std::unique_lock<std::mutex> lock(_was_stopped_mutex);
+            _was_stopped = true;
+            _was_stopped_cv.notify_all();
+        }
+
+        _queue.clear();
+
+        {
+            std::unique_lock<std::mutex> lock(_was_flushed_mutex);
+            _was_flushed = false;
+        }
+
+        std::unique_lock<std::mutex> lock_was_flushed(_was_flushed_mutex);
+        _was_flushed_cv.wait_for(lock_was_flushed, std::chrono::hours(999999), [&]() { return _was_flushed.load(); });
+
+        _queue.start();
+    }
+
+    ~dispatcher()
+    {
+        stop();
+        _queue.clear();
+        _is_alive = false;
+        _thread.join();
+    }
+
+    bool flush()
+    {
+        std::mutex m;
+        std::condition_variable cv;
+        bool invoked = false;
+        auto wait_sucess = std::make_shared<std::atomic_bool>(true);
+        invoke([&, wait_sucess](cancellable_timer t)
+        {
+            ///TODO: use _queue to flush, and implement properly
+            if (_was_stopped || !(*wait_sucess))
+                return;
+
+            {
+                std::lock_guard<std::mutex> locker(m);
+                invoked = true;
+            }
+            cv.notify_one();
+        });
+        std::unique_lock<std::mutex> locker(m);
+        *wait_sucess = cv.wait_for(locker, std::chrono::seconds(10), [&]() { return invoked || _was_stopped; });
+        return *wait_sucess;
+    }
+private:
+    friend cancellable_timer;
+    single_consumer_queue<std::function<void(cancellable_timer)>> _queue;
+    std::thread _thread;
+
+    std::atomic<bool> _was_stopped;
+    std::condition_variable _was_stopped_cv;
+    std::mutex _was_stopped_mutex;
+
+    std::atomic<bool> _was_flushed;
+    std::condition_variable _was_flushed_cv;
+    std::mutex _was_flushed_mutex;
+
+    std::atomic<bool> _is_alive;
+};
+
+template<class T = std::function<void(dispatcher::cancellable_timer)>>
+class active_object
+{
+public:
+    active_object(T operation)
+        : _operation(std::move(operation)), _dispatcher(1), _stopped(true)
+    {
+    }
+
+    void start()
+    {
+        _stopped = false;
+        _dispatcher.start();
+
+        do_loop();
+    }
+
+    void stop()
+    {
+        _stopped = true;
+        _dispatcher.stop();
+    }
+
+    ~active_object()
+    {
+        stop();
+    }
+private:
+    void do_loop()
+    {
+        _dispatcher.invoke([this](dispatcher::cancellable_timer ct)
+        {
+            _operation(ct);
+            if (!_stopped)
+            {
+                do_loop();
+            }
+        });
+    }
+
+    T _operation;
+    dispatcher _dispatcher;
+    std::atomic<bool> _stopped;
+};
