@@ -17,6 +17,7 @@
 #include <sys/ioctl.h>
 #include <fstream>
 #include <cassert>
+#include <dirent.h>
 
 #include <asm/types.h>          /* for videodev2.h */
 
@@ -56,8 +57,7 @@ struct buffer
     size_t  length;
 };
 
-
-static char *dev_name = NULL;
+char *dev_name = NULL;
 static char *imu_port = NULL;
 static int fd = -1;
 struct buffer *buffers = NULL;
@@ -455,6 +455,74 @@ static void close_device(void)
     fd = -1;
 }
 
+
+vector<string> getFiles(string cate_dir)
+{
+    vector<string> files;
+    DIR *dir;
+    struct dirent *ptr;
+
+    if ((dir=opendir(cate_dir.c_str())) == NULL)
+    {
+    cout<< ("Open dir error...") <<endl;
+            exit(1);
+    }
+
+    while ((ptr=readdir(dir)) != NULL)
+    {
+        if (ptr->d_type == 10)
+        {
+        files.push_back(ptr->d_name);
+        }
+        else
+            continue;
+    }
+    closedir(dir);
+    sort(files.begin(), files.end());
+    return files;
+
+}
+
+string get_device_name (string path)
+{
+    string filename = path +"name";
+    ifstream device_name {filename};
+    string line;
+    std::getline(device_name, line);
+    return line;
+}
+
+string get_orbbec_camera_path ()
+{
+    string videoFilePath = "/sys/class/video4linux/";
+//    string imuFilePath = "/sys/class/tty/";
+    string Orbbec_name = "ORBBEC";
+
+    vector<string> files = getFiles(videoFilePath);
+    for (int i = 0; i< files.size(); i++)
+    {
+        string videoFileName = videoFilePath + files[i] + "/";
+        string video_device_name = get_device_name(videoFileName);
+
+        if (video_device_name.find(Orbbec_name) != string::npos)
+        {
+            cout << "Found Orbbec Camera:"<< endl;
+            cout << video_device_name<< endl;
+            cout << "port: /dev/" << files[i] <<endl;
+            return "/dev/"+files[i];
+        }
+    }
+
+}
+
+void get_orbbec_camera_dev()
+{
+    const char* tmp_dev_name = get_orbbec_camera_path().c_str();
+    int length = strlen(tmp_dev_name);
+    dev_name = new char[length + 1];
+    strcpy(dev_name,tmp_dev_name);
+}
+
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "orbbec_camera");
@@ -463,8 +531,10 @@ int main(int argc, char** argv)
     image_pub = it.advertise("/camera/image_raw",10);
     imu_pub = nh.advertise<sensor_msgs::Imu>("IMU_data", 20); 
 
-    dev_name = "/dev/video2";
-    // imu_port = "/dev/ttyACM0";
+    // dev_name = "/dev/video2";
+    // imu_port = "/dev/ttyACM0"; 
+
+    get_orbbec_camera_dev();
     open_device();
     init_device();
     start_capturing ();
