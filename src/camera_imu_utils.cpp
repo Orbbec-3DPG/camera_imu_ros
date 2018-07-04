@@ -36,6 +36,7 @@
 #define IMAGE_WIDTH 640
 #define IMAGE_HEIGHT 480
 #define CLEAR(x) memset (&(x), 0, sizeof (x))
+#define BUFFSIZE 1024
 
 using namespace std;
 using namespace cv;
@@ -62,7 +63,9 @@ static char *imu_port = NULL;
 static int fd = -1;
 struct buffer *buffers = NULL;
 static unsigned int  n_buffers = 0;
-
+bool idCheck = false;
+string OrbbecIdVendor = "2bc5";
+string OrbbecIdProduct = "0f01";
 
 static void errno_exit(const char * s)
 {
@@ -492,6 +495,33 @@ string get_device_name (string path)
     return line;
 }
 
+string get_usb_bus_id(string video4linux_path)
+{
+    ssize_t read_symlink;
+    char buf[BUFFSIZE];
+    cout<< "video4linux_path" << video4linux_path << endl;
+    read_symlink = readlink((char*)video4linux_path.c_str(),buf,BUFFSIZE);
+    string bus_id(buf +9, buf+12);
+    return bus_id;
+}
+
+
+bool check_vendor_id(string camera_class_path)
+{
+    string id_vendor_file = camera_class_path +"/idVendor";
+    string id_product_file = camera_class_path +"/idProduct";
+    ifstream id_vendor_name {id_vendor_file};
+    string id_vendor;
+    std::getline(id_vendor_name, id_vendor);
+    string id_product;
+    ifstream id_product_name {id_product_file};
+    std::getline(id_product_name, id_product);
+    if (id_vendor == OrbbecIdVendor && id_product == OrbbecIdProduct)
+        return true;
+    else
+        return false;
+}
+
 string get_orbbec_camera_path ()
 {
     string videoFilePath = "/sys/class/video4linux/";
@@ -503,13 +533,26 @@ string get_orbbec_camera_path ()
     {
         string videoFileName = videoFilePath + files[i] + "/";
         string video_device_name = get_device_name(videoFileName);
+        string bus_id = get_usb_bus_id(videoFileName+"device");
+        string usb_bus_path = "/sys/bus/usb/devices/";
+        bool id_check = check_vendor_id(usb_bus_path+bus_id);
+        idCheck = &id_check;
 
-        if (video_device_name.find(Orbbec_name) != string::npos)
+        if (video_device_name.find(Orbbec_name) != string::npos && idCheck)
         {
             cout << "Found Orbbec Camera:"<< endl;
             cout << video_device_name<< endl;
             cout << "port: /dev/" << files[i] <<endl;
             return "/dev/"+files[i];
+        }
+
+        else
+        {
+            if (i = files.size() -1)
+            {
+            cout << "Orbbec Camera not found...\n" << "exiting...\n";
+            exit(1);
+            }
         }
     }
 
@@ -522,6 +565,8 @@ void get_orbbec_camera_dev()
     dev_name = new char[length + 1];
     strcpy(dev_name,tmp_dev_name);
 }
+
+
 
 int main(int argc, char** argv)
 {
