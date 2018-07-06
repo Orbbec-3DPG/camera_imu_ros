@@ -43,6 +43,7 @@ using namespace cv;
 
 image_transport::Publisher  image_pub;
 ros::Publisher imu_pub;
+ros::Rate rate(30);
 
 Mat cameraFrame (IMAGE_HEIGHT,IMAGE_WIDTH, CV_8UC1);
 typedef enum 
@@ -64,8 +65,10 @@ static int fd = -1;
 struct buffer *buffers = NULL;
 static unsigned int  n_buffers = 0;
 bool idCheck = false;
+string idBus ="";
 string OrbbecIdVendor = "2bc5";
 string OrbbecIdProduct = "0f01";
+void get_imu_data();
 
 static void errno_exit(const char * s)
 {
@@ -123,6 +126,7 @@ static void process_image(struct buffer *pbuffer)
             image_msg.toImageMsg(image_msgs);
             image_pub.publish(image_msgs);
         }
+        get_imu_data();
 
 
     }
@@ -135,7 +139,7 @@ static void process_image(struct buffer *pbuffer)
 
 void get_imu_data()
 {
-    ifstream file("/dev/ttyACM0");
+    ifstream file(imu_port);
     string line;
     string t;
     float tf;
@@ -148,7 +152,7 @@ void get_imu_data()
     imu_data.header.frame_id = "base_imu";
 
 
-    while(std::getline(file,line))
+    while(std::getline(file,line)&& (ros::ok()))
     {
         if (!line.empty() && !isWhitespace(line))
         {
@@ -193,8 +197,9 @@ void get_imu_data()
         }
         count = 0;
         imu_pub.publish(imu_data);
+        rate.sleep();
     }
-    exit(1);
+    //exit(1);
 }
 
 static int read_frame(void)
@@ -499,7 +504,7 @@ string get_usb_bus_id(string video4linux_path)
 {
     ssize_t read_symlink;
     char buf[BUFFSIZE];
-    cout<< "video4linux_path" << video4linux_path << endl;
+    // cout<< "video4linux_path" << video4linux_path << endl;
     read_symlink = readlink((char*)video4linux_path.c_str(),buf,BUFFSIZE);
     string bus_id(buf +9, buf+12);
     return bus_id;
@@ -525,7 +530,6 @@ bool check_vendor_id(string camera_class_path)
 string get_orbbec_camera_path ()
 {
     string videoFilePath = "/sys/class/video4linux/";
-//    string imuFilePath = "/sys/class/tty/";
     string Orbbec_name = "ORBBEC";
 
     vector<string> files = getFiles(videoFilePath);
@@ -536,7 +540,10 @@ string get_orbbec_camera_path ()
         string bus_id = get_usb_bus_id(videoFileName+"device");
         string usb_bus_path = "/sys/bus/usb/devices/";
         bool id_check = check_vendor_id(usb_bus_path+bus_id);
+        idBus = bus_id;
+        cout << "idbus: "<< idBus <<endl;
         idCheck = &id_check;
+
 
         if (video_device_name.find(Orbbec_name) != string::npos && idCheck)
         {
@@ -545,13 +552,12 @@ string get_orbbec_camera_path ()
             cout << "port: /dev/" << files[i] <<endl;
             return "/dev/"+files[i];
         }
-
         else
         {
-            if (i = files.size() -1)
+            if (i == files.size() -1)
             {
-            cout << "Orbbec Camera not found...\n" << "exiting...\n";
-            exit(1);
+                cout << "Orbbec Camera not found...\n" << "exiting...\n";
+                exit(1);
             }
         }
     }
@@ -567,6 +573,41 @@ void get_orbbec_camera_dev()
 }
 
 
+string get_orbbec_imu_path()
+{
+    string tty_path = "/sys/class/tty/";
+    vector<string> files = getFiles(tty_path);
+    for (int i = 0; i< files.size(); i++)
+    {
+        string ttyFilesName = tty_path + files[i] + "/";
+        string bus_id = get_usb_bus_id(ttyFilesName+"device");
+        if (bus_id == idBus && idCheck)
+        {
+            string imu_path = "/dev/" + files[i];
+            cout<< "Found orbbec imu device: " << imu_path <<endl;
+            cout << "port: /dev/" << files[i] <<endl;
+            return "/dev/"+files[i];
+        }
+
+        else
+        {
+            if (i == files.size() -1)
+            {
+                cout << "Orbbec imu not found...\n";
+                exit(1);
+            }
+        }
+    }
+
+}
+
+void get_orbbec_imu_dev()
+{
+    const char* tmp_dev_name = get_orbbec_imu_path().c_str();
+    int length = strlen(tmp_dev_name);
+    imu_port = new char[length + 1];
+    strcpy(imu_port,tmp_dev_name);
+}
 
 int main(int argc, char** argv)
 {
@@ -580,11 +621,11 @@ int main(int argc, char** argv)
     // imu_port = "/dev/ttyACM0"; 
 
     get_orbbec_camera_dev();
+    get_orbbec_imu_dev();
     open_device();
     init_device();
     start_capturing ();
 
-    ros::Rate rate(30);
     while (ros::ok())
     {
         mainloop();
