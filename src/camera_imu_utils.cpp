@@ -109,19 +109,18 @@ void filter_data(sensor_msgs::Imu imu_raw_data)
         ROS_INFO("First Imu message received");
         last_time_ = current_time_;
         initialized_ = true;
-
     }
     else
     {
         sensor_msgs::Imu imu_data = imu_raw_data;
-        imu_data.header.stamp = ros::Time::now();
+        imu_data.header.stamp = imu_raw_data.header.stamp;
         imu_data.header.frame_id = "base_imu_filtered";
         geometry_msgs::Vector3& ang_vel = imu_data.angular_velocity;
         geometry_msgs::Vector3& lin_acc = imu_data.linear_acceleration;
         float dt = (current_time_ - last_time_).toSec();
         last_time_ = current_time_;
-        std::cout<<"last_time: "<< last_time_ <<endl;
-        std::cout<<"dt: "<< dt <<endl;
+        // std::cout<<"last_time: "<< last_time_ <<endl;
+        // std::cout<<"dt: "<< dt <<endl;
         filter_.madgwickAHRSupdateIMU(
             ang_vel.x, ang_vel.y, ang_vel.z,
             lin_acc.x, lin_acc.y, lin_acc.z,
@@ -169,7 +168,8 @@ static void process_image(struct buffer *pbuffer)
         uchar *secondRow  = cameraFrame.ptr<uchar>(1);
         for(int i=0;i<4;i++)
             firstRow[i] = secondRow[i];
-        ros::Time timestamp = ros::Time::now();
+        ros::Time timestamp = ros::Time(camera_timestamp*1e-9);
+        // cout << "camera_timestamp: " << timestamp << endl;
         if( image_pub.getNumSubscribers() > 0 )
         {
             cv_bridge::CvImage image_msg;
@@ -201,10 +201,10 @@ void get_imu_data()
     int count = 0 ;
     float acc_scale = 0.000598;
     float gyro_scale = 0.000153;
-    ros::Rate rate(30);
+    ros::Rate rate(300);
 
     sensor_msgs::Imu imu_data;
-    imu_data.header.stamp = ros::Time::now();
+    // imu_data.header.stamp = ros::Time::now();
     imu_data.header.frame_id = "base_imu";
 
 
@@ -219,7 +219,10 @@ void get_imu_data()
                 switch(count)
                 {
                 case 0:
-                    // cout<< "IMU timestamp: " << t << endl;
+                    
+                 imu_data.header.stamp =ros::Time(tf*1e-9);
+                 // cout << "imu_data.header.stamp: " << imu_data.header.stamp <<endl;
+                 // cout << "ros::Time::now()" << ros::Time::now() << endl;
                     break;
                 case 1:
                     // cout<< "acc_x: " << tf*acc_scale << endl;
@@ -600,7 +603,7 @@ string get_orbbec_camera_path ()
         string usb_bus_path = "/sys/bus/usb/devices/";
         bool id_check = check_vendor_id(usb_bus_path+bus_id);
         idBus = bus_id;
-        cout << "idbus: "<< idBus <<endl;
+        // cout << "idbus: "<< idBus <<endl;
         idCheck = &id_check;
 
 
