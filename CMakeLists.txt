@@ -25,11 +25,11 @@ include_directories(
 
 find_package (Threads)
 find_package(OpenCV REQUIRED)
-add_executable(orbbec_camera_imu_node src/camera_imu_utils.cpp)
+add_executable(orbbec_camera_imu_node src/camera_imu_utils.cpp src/imu_filter.cpp)
 add_dependencies( orbbec_camera_imu_node  ${catkin_EXPORTED_TARGETS} )
 target_link_libraries(orbbec_camera_imu_node ${OpenCV_LIBS}    ${catkin_LIBRARIES}
 pthread)
 
-add_executable(imu_node src/imu.cpp src/imu_filter.cpp)
-add_dependencies( imu_node  ${catkin_EXPORTED_TARGETS} )
-target_link_libraries(imu_node   ${catkin_LIBRARIES})
+#add_executable(imu_node src/imu.cpp src/imu_filter.cpp)
+#add_dependencies( imu_node  ${catkin_EXPORTED_TARGETS} )
+#target_link_libraries(imu_node   ${catkin_LIBRARIES})
